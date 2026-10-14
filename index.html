@@ -680,7 +680,7 @@ $('mBack').onclick = goHome;
 /* ---------- 선생님께 기록 보내기 ---------- */
 // 구글 시트에 붙은 Apps Script 주소. 기록이 바뀌면 5초 뒤, 앱을 닫을 때, 앱을 열 때 보낸다.
 // 인터넷이 없으면 조용히 실패하고 다음에 다시 보낸다.
-const SYNC_URL = '';
+const SYNC_URL = 'https://script.google.com/macros/s/AKfycbxyMuKV4msj0oOvFW5mCnfVvs7qLPbKNdSWIQQh_F3tnMMhxfrA8TFWGup8XaqC8XOQ/exec';
 if (!S.id) { S.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); store(); }
 let syncTimer = null, dirty = true;
 function queueSync() { dirty = true; clearTimeout(syncTimer); syncTimer = setTimeout(sendSync, 5000); }
