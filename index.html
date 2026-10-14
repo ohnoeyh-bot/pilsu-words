@@ -81,12 +81,13 @@ button:focus-visible { outline: 3px solid var(--conf-line); outline-offset: 2px;
 h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-deep); }
 .round { display: grid; grid-template-columns: 48px 1fr; align-items: center; gap: 8px; padding: 7px 4px; border-top: 1px solid var(--line); }
 .round > span { font-size: 13px; font-weight: 700; color: var(--muted); }
-.days { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
-.days button { position: relative; aspect-ratio: 1; border-radius: 6px; background: var(--paper); border: 1px solid var(--line);
-  font-size: 11px; font-weight: 600; color: var(--muted); }
+.days { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.days button { position: relative; padding: 10px 12px; border-radius: 8px; background: var(--paper); border: 1px solid var(--line);
+  font-size: 14px; font-weight: 700; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; }
+.days button small { font-size: 12px; font-weight: 500; opacity: .8; }
 .days button.done { background: var(--blue); border-color: var(--blue); color: #fff; }
 .days button.next { border: 2px solid var(--blue); color: var(--blue); }
-.days button.tested::after { content: ""; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: #69db7c; }
+.days button.tested::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #69db7c; }
 .legend { font-size: 12px; color: var(--muted); margin: 10px 4px 0; display: flex; gap: 14px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
 
@@ -339,11 +340,13 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 <script src="words.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-const DAYS = Math.ceil(WORDS.length / 10);
+const PER = 50; // DAY 하나에 들어가는 단어 수
+const DAYS = Math.ceil(WORDS.length / PER);
 const KEY = 'pilsu-v1';
 // done: 카드 다 본 DAY / mark: 단어번호 → 'u'(몰라요) 'c'(헷갈려요) / score: DAY → 테스트 최고 점수
 let S = { done: {}, mark: {}, score: {}, koFirst: false, autoSay: false };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY)) || {}); } catch (e) {}
+if (S.per !== PER) { S.done = {}; S.score = {}; S.per = PER; } // DAY 크기가 바뀌면 DAY 기록만 새로 시작 (몰라요/헷갈려요 표시는 유지)
 if (Array.isArray(S.again)) { S.again.forEach(n => { if (!S.mark[n]) S.mark[n] = 'u'; }); delete S.again; } // 첫 버전 "다시 볼래요" 기록 옮기기
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
@@ -353,9 +356,9 @@ const plain = s => s.replace(/[{}]/g, '');
 const target = s => (s.match(/\{(.+?)\}/) || [, ''])[1];
 const pad = n => String(n).padStart(3, '0');
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
-// 종이 단어장 위치: n번 → N차 DAY d
-const bookPos = n => `${Math.floor((n - 1) / 100) + 1}차 DAY ${Math.floor(((n - 1) % 100) / 10) + 1}`;
-const dayRange = d => [(d - 1) * 10 + 1, Math.min(d * 10, WORDS.length)];
+const dayRange = d => [(d - 1) * PER + 1, Math.min(d * PER, WORDS.length)];
+// DAY → 종이 단어장 위치 (예: 3차 DAY 1–5)
+const dayBook = d => { const [a, b] = dayRange(d), r = Math.floor((a - 1) / 100) + 1, x = Math.floor(((a - 1) % 100) / 10) + 1, y = Math.floor(((b - 1) % 100) / 10) + 1; return `${r}차 DAY ${x === y ? x : x + '–' + y}`; };
 const dayDeck = d => { const [a, b] = dayRange(d), r = []; for (let n = a; n <= b; n++) r.push(n); return r; };
 const markedDeck = k => Object.keys(S.mark).filter(n => S.mark[n] === k).map(Number).sort((x, y) => x - y);
 const nextDay = () => { for (let d = 1; d <= DAYS; d++) if (!S.done[d]) return d; return DAYS; };
@@ -391,7 +394,7 @@ document.querySelectorAll('.quit').forEach(b => b.onclick = () => ctx.list ? ope
 /* ---------- 처음 화면 ---------- */
 function renderHome() {
   const d = nextDay(), [a, b] = dayRange(d), w = WORDS[a - 1];
-  $('tWhere').textContent = `${pad(a)}–${pad(b)}번  (책 ${bookPos(a)})`;
+  $('tWhere').textContent = `${pad(a)}–${pad(b)}번  (책 ${dayBook(d)})`;
   $('tDay').textContent = S.done[d] ? `DAY ${d} 복습` : `오늘 할 차례: DAY ${d}`;
   $('tPeek').textContent = w[0];
   $('tPeekKo').textContent = `그리고 ${b - a}개 더`;
@@ -401,11 +404,12 @@ function renderHome() {
   $('nU').textContent = markedDeck('u').length;
   $('nC').textContent = markedDeck('c').length;
   let h = '';
-  for (let r = 0; r * 10 < DAYS; r++) {
+  const perRound = 100 / PER;
+  for (let r = 0; r * perRound < DAYS; r++) {
     h += `<div class="round"><span>${r + 1}차</span><div class="days">`;
-    for (let k = 1; k <= 10 && r * 10 + k <= DAYS; k++) {
-      const day = r * 10 + k, cls = [S.done[day] ? 'done' : '', day === d && !S.done[day] ? 'next' : '', S.score[day] != null ? 'tested' : ''].join(' ');
-      h += `<button data-d="${day}" class="${cls}" aria-label="DAY ${day}">${k}</button>`;
+    for (let k = 1; k <= perRound && r * perRound + k <= DAYS; k++) {
+      const day = r * perRound + k, cls = [S.done[day] ? 'done' : '', day === d && !S.done[day] ? 'next' : '', S.score[day] != null ? 'tested' : ''].join(' ');
+      h += `<button data-d="${day}" class="${cls}" aria-label="DAY ${day}">DAY ${day}<small>책 ${dayBook(day).split(' DAY ')[1]}</small></button>`;
     }
     h += '</div></div>';
   }
@@ -421,7 +425,7 @@ $('grid').onclick = e => {
   sheetDay = +b.dataset.d; const [a, z] = dayRange(sheetDay);
   $('dsTitle').textContent = `DAY ${sheetDay}`;
   const sc = S.score[sheetDay];
-  $('dsSub').textContent = `${pad(a)}–${pad(z)}번, 책 ${bookPos(a)}` + (sc != null ? `  /  테스트 최고 ${sc}점` : '');
+  $('dsSub').textContent = `${pad(a)}–${pad(z)}번, 책 ${dayBook(sheetDay)}` + (sc != null ? `  /  테스트 최고 ${sc}점` : '');
   $('daySheet').classList.add('on');
 };
 $('dsStudy').onclick = () => startStudy({ day: sheetDay });
@@ -433,7 +437,7 @@ document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e =
 // ctx: { day: 숫자 } 또는 { list: 'u'|'c' }
 let ctx = {}, deck = [], pos = 0, marks = [], revealed = false;
 
-function ctxLabel() { return ctx.day ? `DAY ${ctx.day} (책 ${bookPos(dayRange(ctx.day)[0])})` : LIST_NAME[ctx.list]; }
+function ctxLabel() { return ctx.day ? `DAY ${ctx.day} (책 ${dayBook(ctx.day)})` : LIST_NAME[ctx.list]; }
 function ctxDeck() { return ctx.day ? dayDeck(ctx.day) : markedDeck(ctx.list); }
 
 function startStudy(c) {

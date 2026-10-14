@@ -1,6 +1,6 @@
 // 한 번 열면 인터넷 없이도(지하철 등) 열리도록 파일을 핸드폰에 저장해 둠
 // 단어나 화면을 고치면 VERSION 숫자를 올려야 학생 폰에 새 버전이 반영됨
-const VERSION = 'v2';
+const VERSION = 'v3';
 const FILES = ['./', 'index.html', 'words.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
