@@ -1,6 +1,6 @@
 // 인터넷 되면 항상 최신 파일을 받고, 안 되면(지하철 등) 핸드폰에 저장해 둔 파일로 열기
 // 단어나 화면을 고치면 VERSION 숫자를 올린다
-const VERSION = 'v4';
+const VERSION = 'v5';
 const FILES = ['./', 'index.html', 'words.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -16,6 +16,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
+  // 발음 파일은 폰 브라우저가 직접 받게 둠 (아이폰은 소리 파일을 중간에서 건드리면 재생이 안 되는 경우가 있음)
+  if (url.pathname.includes('/audio/')) return;
   if (url.origin === location.origin) {
     // 우리 파일: 인터넷 먼저, 실패하면 저장본
     e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(res => {

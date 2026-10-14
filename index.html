@@ -368,18 +368,26 @@ const LIST_NAME = { u: '모르는 단어', c: '헷갈리는 단어' };
 function setMark(n, m) { if (m === 'k') delete S.mark[n]; else S.mark[n] = m; save(); }
 
 /* ---------- 발음 ---------- */
-let voice = null;
-function pickVoice() {
-  const vs = speechSynthesis.getVoices().filter(v => v.lang && v.lang.startsWith('en'));
-  voice = vs.find(v => v.lang === 'en-US') || vs[0] || null;
-}
-if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-function say(text) {
+// audio/w/0001.m4a = 1번 단어, audio/s/0001.m4a = 1번 예문 (맥 Samantha 음성으로 미리 만든 파일)
+// 파일이 안 열리면(인터넷 없음 등) 폰에 들어 있는 읽어주기 기능으로 대신 읽음
+const player = new Audio();
+player.preload = 'auto';
+function tts(text) {
   if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
+  if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US'; u.rate = 0.9; if (voice) u.voice = voice;
+  u.lang = 'en-US'; u.rate = 0.9;
   speechSynthesis.speak(u);
+}
+function play(n, kind) {
+  const text = kind === 'w' ? WORDS[n - 1][0] : plain(WORDS[n - 1][2]);
+  let fell = false;
+  const fallback = () => { if (!fell) { fell = true; tts(text); } };
+  player.onerror = fallback;
+  player.pause();
+  player.src = `audio/${kind}/${String(n).padStart(4, '0')}.m4a`;
+  const p = player.play();
+  if (p && p.catch) p.catch(e => { if (e && e.name !== 'AbortError') fallback(); });
 }
 const SPK = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 
@@ -388,7 +396,7 @@ function show(id) {
   document.querySelectorAll('.sheet').forEach(s => s.classList.remove('on'));
   window.scrollTo(0, 0);
 }
-function goHome() { if ('speechSynthesis' in window) speechSynthesis.cancel(); renderHome(); show('home'); }
+function goHome() { player.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); renderHome(); show('home'); }
 document.querySelectorAll('.quit').forEach(b => b.onclick = () => ctx.list ? openMarked(ctx.list) : goHome());
 
 /* ---------- 처음 화면 ---------- */
@@ -466,14 +474,14 @@ function renderCard() {
 }
 function go(i) {
   pos = i; revealed = false; renderCard();
-  if (S.autoSay && !S.koFirst) say(WORDS[deck[pos] - 1][0]);
+  if (S.autoSay && !S.koFirst) play(deck[pos], 'w');
 }
 $('card').onclick = e => {
   const s = e.target.closest('[data-say]');
   const [w, , ex] = WORDS[deck[pos] - 1];
-  if (s) { say(s.dataset.say === 'w' ? w : plain(ex)); return; }
+  if (s) { play(deck[pos], s.dataset.say); return; }
   revealed = !revealed; renderCard();
-  if (revealed && S.koFirst && S.autoSay) say(w);
+  if (revealed && S.koFirst && S.autoSay) play(deck[pos], 'w');
 };
 $('card').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('card').click(); } };
 
@@ -573,7 +581,7 @@ function renderQ() {
   $('opts').innerHTML = q.opts.map((o, i) => `<button data-i="${i}">${esc(o)}</button>`).join('');
   $('nextQ').classList.remove('on');
 }
-$('qCard').onclick = e => { if (e.target.closest('[data-say]')) say(WORDS[Q[qi].n - 1][0]); };
+$('qCard').onclick = e => { if (e.target.closest('[data-say]')) play(Q[qi].n, 'w'); };
 $('opts').onclick = e => {
   const b = e.target.closest('button[data-i]'); if (!b || b.disabled) return;
   const q = Q[qi], pick = q.opts[+b.dataset.i], ok = pick === q.right, [w, m, ex] = WORDS[q.n - 1];
@@ -655,7 +663,7 @@ function syncSw() { $('swKo').setAttribute('aria-checked', S.koFirst); $('swAuto
 $('openSet').onclick = () => { syncSw(); $('setSheet').classList.add('on'); };
 $('closeSet').onclick = () => $('setSheet').classList.remove('on');
 $('swKo').onclick = () => { S.koFirst = !S.koFirst; save(); syncSw(); };
-$('swAuto').onclick = () => { S.autoSay = !S.autoSay; save(); syncSw(); if (S.autoSay) say('Hello'); };
+$('swAuto').onclick = () => { S.autoSay = !S.autoSay; save(); syncSw(); if (S.autoSay) play(1, 'w'); };
 $('reset').onclick = () => {
   if ($('reset').dataset.sure) {
     S.done = {}; S.mark = {}; S.score = {}; save(); delete $('reset').dataset.sure;
