@@ -200,6 +200,9 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 .sw[aria-checked="true"] { background: var(--blue); }
 .sw[aria-checked="true"]::after { transform: translateX(20px); }
 .reset { color: var(--red); font-size: 14px; padding: 12px 0 0; }
+.name-in { width: 100%; padding: 14px 16px; border: 1.5px solid var(--line); border-radius: 12px; font: inherit; font-size: 17px; margin-top: 6px; }
+.name-in:focus { outline: none; border-color: var(--blue); }
+.name-btn { flex: none; color: var(--blue); font-weight: 700; font-size: 15px; padding: 6px 0; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -334,8 +337,22 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
       <div>카드 넘기면 발음 듣기<small>이어폰 끼고 들으면 좋아요</small></div>
       <button class="sw" id="swAuto" role="switch" aria-checked="false" aria-label="카드 넘기면 발음 듣기"></button>
     </div>
+    <div class="opt">
+      <div>내 이름<small id="sentAt">선생님께 공부 기록이 자동으로 가요</small></div>
+      <button class="name-btn" id="setName"></button>
+    </div>
     <button class="reset" id="reset">기록 전부 지우기</button>
     <button class="big primary" id="closeSet">닫기</button>
+  </div>
+</div>
+
+<!-- 이름 (처음 한 번) -->
+<div class="sheet" id="nameSheet">
+  <div class="panel">
+    <h3>이름을 알려 주세요</h3>
+    <p class="sub">공부한 DAY, 테스트 점수, 모르는 단어가 선생님께 자동으로 가요.</p>
+    <input class="name-in" id="nameIn" type="text" maxlength="20" autocomplete="off" placeholder="이름">
+    <button class="big primary" id="nameOk">시작하기</button>
   </div>
 </div>
 
@@ -350,7 +367,8 @@ let S = { done: {}, mark: {}, score: {}, koFirst: false, autoSay: false };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY)) || {}); } catch (e) {}
 if (S.per !== PER) { S.done = {}; S.score = {}; S.per = PER; } // DAY 크기가 바뀌면 DAY 기록만 새로 시작 (몰라요/헷갈려요 표시는 유지)
 if (Array.isArray(S.again)) { S.again.forEach(n => { if (!S.mark[n]) S.mark[n] = 'u'; }); delete S.again; } // 첫 버전 "다시 볼래요" 기록 옮기기
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const store = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const save = () => { store(); queueSync(); };
 
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const hl = s => esc(s).replace(/\{(.+?)\}/g, '<b>$1</b>');
@@ -440,7 +458,7 @@ $('grid').onclick = e => {
 $('dsStudy').onclick = () => startStudy({ day: sheetDay });
 $('dsTest').onclick = () => startTest({ day: sheetDay });
 $('dsClose').onclick = () => $('daySheet').classList.remove('on');
-document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => { if (e.target === s) s.classList.remove('on'); }));
+document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => { if (e.target === s && s.id !== 'nameSheet') s.classList.remove('on'); }));
 
 /* ---------- 카드 넘겨보기 ---------- */
 // ctx: { day: 숫자 } 또는 { list: 'u'|'c' }
@@ -659,9 +677,45 @@ $('mStudy').onclick = () => startStudy({ list: tab });
 $('mTest').onclick = () => startTest({ list: tab });
 $('mBack').onclick = goHome;
 
+/* ---------- 선생님께 기록 보내기 ---------- */
+// 구글 시트에 붙은 Apps Script 주소. 기록이 바뀌면 5초 뒤, 앱을 닫을 때, 앱을 열 때 보낸다.
+// 인터넷이 없으면 조용히 실패하고 다음에 다시 보낸다.
+const SYNC_URL = '';
+if (!S.id) { S.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); store(); }
+let syncTimer = null, dirty = true;
+function queueSync() { dirty = true; clearTimeout(syncTimer); syncTimer = setTimeout(sendSync, 5000); }
+function sendSync() {
+  clearTimeout(syncTimer);
+  if (!SYNC_URL || !S.name || !dirty || !navigator.onLine) return;
+  const words = k => markedDeck(k).map(n => [n, WORDS[n - 1][0], WORDS[n - 1][1]]);
+  const body = JSON.stringify({
+    id: S.id, name: S.name, at: new Date().toISOString(), per: PER, days: DAYS, nextDay: nextDay(),
+    done: Object.keys(S.done).map(Number).sort((a, b) => a - b),
+    score: S.score, unknown: words('u'), confused: words('c'),
+  });
+  dirty = false;
+  fetch(SYNC_URL, { method: 'POST', mode: 'no-cors', body, keepalive: body.length < 60000 })
+    .then(() => { S.sentAt = Date.now(); store(); })
+    .catch(() => { dirty = true; });
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sendSync(); });
+window.addEventListener('online', sendSync);
+function askName() { $('nameIn').value = S.name || ''; $('nameSheet').classList.add('on'); }
+$('nameOk').onclick = () => {
+  const v = $('nameIn').value.trim(); if (!v) { $('nameIn').focus(); return; }
+  S.name = v; dirty = true; store(); $('setName').textContent = v; $('nameSheet').classList.remove('on'); sendSync();
+};
+$('nameIn').onkeydown = e => { if (e.key === 'Enter') $('nameOk').click(); };
+
 /* ---------- 설정 ---------- */
 function syncSw() { $('swKo').setAttribute('aria-checked', S.koFirst); $('swAuto').setAttribute('aria-checked', S.autoSay); }
-$('openSet').onclick = () => { syncSw(); $('setSheet').classList.add('on'); };
+$('openSet').onclick = () => {
+  syncSw(); $('setName').textContent = S.name || '정하기';
+  const t = S.sentAt && new Date(S.sentAt);
+  if (t) $('sentAt').textContent = `선생님께 보낸 시간: ${t.getMonth() + 1}/${t.getDate()} ${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}`;
+  $('setSheet').classList.add('on');
+};
+$('setName').onclick = askName;
 $('closeSet').onclick = () => $('setSheet').classList.remove('on');
 $('swKo').onclick = () => { S.koFirst = !S.koFirst; save(); syncSw(); };
 $('swAuto').onclick = () => { S.autoSay = !S.autoSay; save(); syncSw(); if (S.autoSay) play(1, 'w'); };
@@ -677,6 +731,7 @@ renderHome();
 const hd = location.hash.match(/^#(day|test)(\d+)$/);
 if (hd) (hd[1] === 'day' ? startStudy : startTest)({ day: Math.min(+hd[2], DAYS) });
 const hl2 = location.hash.match(/^#list-([uc])$/); if (hl2) openMarked(hl2[1]);
+if (!S.name) askName(); else sendSync(); // 처음이면 이름 묻기, 아니면 열 때마다 기록 보내기
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update());
   // 새 버전이 설치되면 화면을 한 번 새로 고침
