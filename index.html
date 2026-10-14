@@ -64,6 +64,8 @@ button:focus-visible { outline: 3px solid var(--conf-line); outline-offset: 2px;
 .pair button { padding: 15px 0; border-radius: 12px; font-weight: 700; font-size: 16px; }
 .b-fill { background: var(--blue); color: #fff; }
 .b-line { background: var(--paper); border: 2px solid var(--blue) !important; color: var(--blue); }
+.b-listen { width: 100%; margin-top: 8px; padding: 13px 0; border-radius: 12px; background: #e9eefa; color: var(--blue); font-weight: 700; font-size: 15px;
+  display: flex; align-items: center; justify-content: center; gap: 8px; }
 
 .meter { margin: 0 4px 22px; }
 .meter p { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
@@ -135,6 +137,19 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 .a-k { background: var(--blue); color: #fff; }
 .back { margin-top: 10px; align-self: center; font-size: 14px; color: var(--muted); padding: 8px 14px; }
 .back[disabled] { visibility: hidden; }
+
+/* ---------- 연속 듣기 ---------- */
+.lpart { border-radius: 10px; padding: 6px 10px; margin: 0 -10px; transition: background .2s; }
+.lpart.now { background: #e9eefa; }
+#lCard .meaning { margin-top: 10px; }
+#lCard .ex { margin-top: 14px; }
+.ldone { margin-top: auto; padding-top: 18px; border-top: 1px dashed var(--line); color: var(--muted); font-size: 14px; text-align: center; }
+.lctl { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; margin-top: 14px; }
+.lctl button { padding: 15px 0; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); color: var(--blue); display: grid; place-items: center; }
+.lctl .lplay { background: var(--blue); border-color: var(--blue); color: #fff; }
+.lctl button:disabled { opacity: .35; }
+.lopt { margin-top: 10px; align-self: center; font-size: 14px; color: var(--muted); padding: 8px 14px; }
+.lopt b { color: var(--blue); }
 
 /* ---------- 테스트 ---------- */
 .qtype { font-size: 13px; font-weight: 700; color: var(--muted); }
@@ -229,6 +244,7 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
         <button class="b-fill" id="tStudy">카드 넘겨보기</button>
         <button class="b-line" id="tTest">테스트</button>
       </div>
+      <button class="b-listen" id="tListen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg>연속 듣기 <small style="font-weight:500">이어폰으로 단어·뜻·예문</small></button>
     </div>
   </div>
 
@@ -264,6 +280,25 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
     <button class="a-k" data-m="k">알아요</button>
   </div>
   <button class="back" id="bPrev">이전 단어</button>
+</section>
+
+<!-- 연속 듣기 -->
+<section class="screen" id="listen">
+  <div class="bar-top">
+    <button class="x" id="lQuit" aria-label="그만 듣기">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <span class="label" id="lLabel"></span>
+    <span class="count" id="lCount"></span>
+  </div>
+  <div class="dots" id="lDots"></div>
+  <div class="card" id="lCard"></div>
+  <div class="lctl">
+    <button id="lPrev" aria-label="이전 단어"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+    <button class="lplay" id="lPlay" aria-label="재생"></button>
+    <button id="lNext" aria-label="다음 단어"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+  </div>
+  <button class="lopt" id="lLoop"></button>
 </section>
 
 <!-- 테스트 -->
@@ -311,6 +346,7 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
       <button class="big primary" id="mStudy">카드로 보기</button>
       <button class="big line" id="mTest">테스트 보기</button>
     </div>
+    <button class="big plain" id="mListen" style="margin-top:8px">연속 듣기</button>
   </div>
 </section>
 
@@ -321,6 +357,7 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
     <p class="sub" id="dsSub"></p>
     <button class="big primary" id="dsStudy">카드 넘겨보기</button>
     <button class="big line" id="dsTest">테스트 보기</button>
+    <button class="big line" id="dsListen">연속 듣기</button>
     <button class="big plain" id="dsClose">닫기</button>
   </div>
 </div>
@@ -405,6 +442,7 @@ function play(n, kind) {
   const text = kind === 'w' ? WORDS[n - 1][0] : plain(WORDS[n - 1][2]);
   let fell = false;
   const fallback = () => { if (!fell) { fell = true; tts(text); } };
+  stopListen();
   player.onerror = fallback;
   player.pause();
   player.src = `audio/${kind}/${String(n).padStart(4, '0')}.m4a`;
@@ -418,7 +456,7 @@ function show(id) {
   document.querySelectorAll('.sheet').forEach(s => s.classList.remove('on'));
   window.scrollTo(0, 0);
 }
-function goHome() { player.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); renderHome(); show('home'); }
+function goHome() { stopListen(); player.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); renderHome(); show('home'); }
 document.querySelectorAll('.quit').forEach(b => b.onclick = () => ctx.list ? openMarked(ctx.list) : goHome());
 
 /* ---------- 처음 화면 ---------- */
@@ -444,6 +482,7 @@ function renderHome() {
 }
 $('tStudy').onclick = () => startStudy({ day: nextDay() });
 $('tTest').onclick = () => startTest({ day: nextDay() });
+$('tListen').onclick = () => startListen({ day: nextDay() });
 document.querySelectorAll('.markBtn').forEach(b => b.onclick = () => openMarked(b.dataset.list));
 
 let sheetDay = 0;
@@ -457,6 +496,7 @@ $('grid').onclick = e => {
 };
 $('dsStudy').onclick = () => startStudy({ day: sheetDay });
 $('dsTest').onclick = () => startTest({ day: sheetDay });
+$('dsListen').onclick = () => startListen({ day: sheetDay });
 $('dsClose').onclick = () => $('daySheet').classList.remove('on');
 document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => { if (e.target === s && s.id !== 'nameSheet') s.classList.remove('on'); }));
 
@@ -553,6 +593,102 @@ function finishStudy() {
   show('end');
 }
 $('eHome').onclick = goHome;
+
+/* ---------- 연속 듣기 ---------- */
+// 화면 안 보고 이어폰으로: 단어 → 한국어 뜻 → 예문 → 다음 단어 … 자동으로 이어 재생
+// audio/m/0001.m4a = 1번 단어 뜻 (맥 Yuna 음성). 파일이 안 열리면 폰 읽어주기 기능으로 대신
+const STEPS = ['w', 'm', 's'];
+let L = { deck: [], pos: 0, step: 0, on: false, done: false, tok: 0, timer: null, loop: false };
+const PLAY_I = '<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>';
+const PAUSE_I = '<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
+
+function startListen(c) {
+  ctx = c; const d = ctxDeck(); if (!d.length) return;
+  stopListen();
+  L.deck = d; L.pos = 0; L.step = 0; L.done = false;
+  $('lLabel').textContent = ctxLabel();
+  show('listen'); listenPlay(); // 누른 순간 바로 재생해야 폰이 소리를 막지 않음
+}
+function stopListen() {
+  if (!L.on && !L.timer) return;
+  L.on = false; L.tok++; clearTimeout(L.timer); L.timer = null;
+  player.onended = null; player.pause();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if ($('listen').classList.contains('on')) renderListen();
+}
+function listenPlay() { if (L.done) { L.pos = 0; L.step = 0; L.done = false; } L.on = true; listenStep(); }
+function renderListen() {
+  const n = L.deck[L.pos], [w, m, ex, ko] = WORDS[n - 1], k = L.on ? STEPS[L.step] : '';
+  $('lCount').textContent = `${L.pos + 1} / ${L.deck.length}`;
+  $('lDots').innerHTML = L.deck.length <= 40
+    ? L.deck.map((_, i) => `<i class="${i === L.pos ? 'cur' : i < L.pos ? 'k' : ''}"></i>`).join('')
+    : `<i class="cur" style="flex:none;width:${(L.pos + 1) / L.deck.length * 100}%"></i>`;
+  $('lCard').innerHTML = `<span class="hole"></span><span class="num">${pad(n)}</span>
+    <div class="lpart ${k === 'w' ? 'now' : ''}"><span class="word">${esc(w)}</span></div>
+    <div class="lpart ${k === 'm' ? 'now' : ''}"><div class="meaning">${esc(m)}</div></div>
+    <div class="lpart ${k === 's' ? 'now' : ''}"><p class="ex">${hl(ex)}</p><p class="ko">${esc(ko)}</p></div>`
+    + (L.done ? '<div class="ldone">다 들었어요. ▶를 누르면 처음부터 다시 들어요.</div>' : '');
+  $('lPlay').innerHTML = L.on ? PAUSE_I : PLAY_I;
+  $('lPlay').setAttribute('aria-label', L.on ? '멈춤' : '재생');
+  $('lPrev').disabled = L.pos === 0;
+  $('lNext').disabled = L.pos === L.deck.length - 1 && !L.loop;
+  $('lLoop').innerHTML = `끝나면 처음부터 다시: <b>${L.loop ? '켜짐' : '꺼짐'}</b>`;
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: w, artist: m, album: ctxLabel() });
+    navigator.mediaSession.playbackState = L.on ? 'playing' : 'paused';
+  }
+}
+function listenStep() {
+  clearTimeout(L.timer); L.timer = null;
+  if (!L.on) return;
+  renderListen();
+  const n = L.deck[L.pos], kind = STEPS[L.step], tok = ++L.tok;
+  const next = () => {
+    if (tok !== L.tok || !L.on) return;
+    let gap = 350;
+    if (++L.step >= STEPS.length) {
+      L.step = 0; gap = 900;
+      if (++L.pos >= L.deck.length) {
+        if (L.loop) L.pos = 0;
+        else { L.pos = L.deck.length - 1; L.on = false; L.done = true; renderListen(); return; }
+      }
+    }
+    L.timer = setTimeout(listenStep, gap);
+  };
+  let fell = false;
+  const fallback = () => {
+    if (fell || tok !== L.tok) return; fell = true;
+    if (!('speechSynthesis' in window)) { next(); return; }
+    const [w, m, ex] = WORDS[n - 1];
+    const u = new SpeechSynthesisUtterance(kind === 'w' ? w : kind === 'm' ? m.replace(/[~;()\[\]]/g, ' ') : plain(ex));
+    u.lang = kind === 'm' ? 'ko-KR' : 'en-US'; u.rate = 0.9;
+    u.onend = next; u.onerror = next;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  };
+  player.onended = next;
+  player.onerror = fallback;
+  player.src = `audio/${kind}/${String(n).padStart(4, '0')}.m4a`;
+  const p = player.play();
+  if (p && p.catch) p.catch(e => { if (e && e.name === 'NotAllowedError') { L.on = false; renderListen(); } else if (e && e.name !== 'AbortError') fallback(); });
+}
+function listenJump(i) {
+  L.pos = (i + L.deck.length) % L.deck.length; L.step = 0; L.done = false;
+  if (L.on) { L.tok++; player.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); listenStep(); } else renderListen();
+}
+$('lPlay').onclick = () => L.on ? stopListen() : listenPlay();
+$('lPrev').onclick = () => { if (L.pos > 0) listenJump(L.pos - 1); };
+$('lNext').onclick = () => { if (L.pos < L.deck.length - 1 || L.loop) listenJump(L.pos + 1); };
+$('lCard').onclick = () => $('lPlay').click();
+$('lLoop').onclick = () => { L.loop = !L.loop; renderListen(); };
+$('lQuit').onclick = () => { stopListen(); ctx.list ? openMarked(ctx.list) : goHome(); };
+// 잠금 화면·이어폰 버튼으로 멈춤/재생/다음
+if ('mediaSession' in navigator) {
+  const h = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch (e) {} };
+  h('play', () => { if ($('listen').classList.contains('on') && !L.on) listenPlay(); });
+  h('pause', () => stopListen());
+  h('nexttrack', () => $('lNext').click());
+  h('previoustrack', () => $('lPrev').click());
+}
 
 /* ---------- 테스트 ---------- */
 // 문제 2종: 'blank' 예문 빈칸에 들어갈 영어 고르기 / 'mean' 영어 보고 뜻 고르기
@@ -675,6 +811,7 @@ $('mList').onclick = e => {
 };
 $('mStudy').onclick = () => startStudy({ list: tab });
 $('mTest').onclick = () => startTest({ list: tab });
+$('mListen').onclick = () => startListen({ list: tab });
 $('mBack').onclick = goHome;
 
 /* ---------- 선생님께 기록 보내기 ---------- */
@@ -727,9 +864,9 @@ $('reset').onclick = () => {
 };
 
 renderHome();
-// 주소 끝에 #day5 / #test5 / #list-u 처럼 붙이면 그 화면이 바로 열림
-const hd = location.hash.match(/^#(day|test)(\d+)$/);
-if (hd) (hd[1] === 'day' ? startStudy : startTest)({ day: Math.min(+hd[2], DAYS) });
+// 주소 끝에 #day5 / #test5 / #listen5 / #list-u 처럼 붙이면 그 화면이 바로 열림
+const hd = location.hash.match(/^#(day|test|listen)(\d+)$/);
+if (hd) ({ day: startStudy, test: startTest, listen: startListen })[hd[1]]({ day: Math.min(+hd[2], DAYS) });
 const hl2 = location.hash.match(/^#list-([uc])$/); if (hl2) openMarked(hl2[1]);
 if (!S.name) askName(); else sendSync(); // 처음이면 이름 묻기, 아니면 열 때마다 기록 보내기
 if ('serviceWorker' in navigator) {
