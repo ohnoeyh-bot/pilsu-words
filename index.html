@@ -668,7 +668,12 @@ renderHome();
 const hd = location.hash.match(/^#(day|test)(\d+)$/);
 if (hd) (hd[1] === 'day' ? startStudy : startTest)({ day: Math.min(+hd[2], DAYS) });
 const hl2 = location.hash.match(/^#list-([uc])$/); if (hl2) openMarked(hl2[1]);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update());
+  // 새 버전이 설치되면 화면을 한 번 새로 고침
+  let reloaded = false, had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !reloaded) { reloaded = true; location.reload(); } });
+}
 </script>
 </body>
 </html>
