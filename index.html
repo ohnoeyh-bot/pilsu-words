@@ -123,6 +123,8 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 .exrow { display: flex; gap: 8px; align-items: flex-start; }
 .exrow .ex { flex: 1; }
 .exrow .say { margin-top: 24px; }
+.pos { display: inline-block; font-size: .62em; font-weight: 700; line-height: 1; padding: 3px 4px; margin-right: 4px;
+  border: 1px solid currentColor; border-radius: 4px; vertical-align: .18em; opacity: .75; }
 .meaning { font-size: 22px; font-weight: 800; color: var(--blue); line-height: 1.35; }
 .ko { font-size: 16px; color: #5b6478; line-height: 1.55; margin-top: 10px; }
 .reveal { margin-top: auto; padding-top: 18px; border-top: 1px dashed var(--line); }
@@ -398,6 +400,7 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 </div>
 
 <script src="words.js"></script>
+<script src="pos.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const PER = 30; // DAY 하나에 들어가는 단어 수
@@ -413,6 +416,24 @@ const save = () => { store(); queueSync(); };
 
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const hl = s => esc(s).replace(/\{(.+?)\}/g, '<b>$1</b>');
+// 뜻 앞에 품사 표시. pos.js의 POS[n-1]은 뜻 조각(쉼표·세미콜론으로 나눈 것)마다 품사를 |로 이어 적은 것
+// 품사 글자: 명 동 조(조동사) 형 부 전 접 대 감. 한 조각에 두 글자면 둘 다 표시 — 예) 휴식(하다) → 명동
+// 품사가 같은 뜻이 이어지면 표시는 한 번만 — 예) [동] 성취하다, 이루다  /  [명] 원인 [동] ~을 일으키다
+function meanH(n) {
+  const m = WORDS[n - 1][1], p = ((typeof POS !== 'undefined' && POS[n - 1]) || '').split('|');
+  const segs = [], seps = []; let d = 0, c = '';
+  for (const ch of m) {
+    if ('(['.includes(ch)) d++; if (')]'.includes(ch)) d--;
+    if ((ch === ',' || ch === ';') && !d) { segs.push(c.trim()); seps.push(ch); c = ''; } else c += ch;
+  }
+  segs.push(c.trim());
+  if (p.length !== segs.length) return esc(m);
+  const tag = x => [...x].map(t => `<span class="pos">${t}</span>`).join('');
+  return segs.map((s, i) => (!i ? '' : p[i] === p[i - 1] ? seps[i - 1] + ' ' : ' ')
+    + (p[i] !== p[i - 1] ? tag(p[i]) : '') + esc(s)).join('');
+}
+
+
 const plain = s => s.replace(/[{}]/g, '');
 const target = s => (s.match(/\{(.+?)\}/) || [, ''])[1];
 const pad = n => String(n).padStart(3, '0');
@@ -526,7 +547,7 @@ function renderCard() {
   const enSide = `
     <div class="wordrow"><span class="word">${esc(w)}</span><button class="say" data-say="w" aria-label="단어 발음 듣기">${SPK}</button></div>
     <div class="exrow"><p class="ex">${hl(ex)}</p><button class="say sm" data-say="s" aria-label="예문 발음 듣기">${SPK}</button></div>`;
-  const koSide = `<div class="meaning">${esc(m)}</div><p class="ko">${esc(ko)}</p>`;
+  const koSide = `<div class="meaning">${meanH(n)}</div><p class="ko">${esc(ko)}</p>`;
   const body = !S.koFirst
     ? enSide + (revealed ? `<div class="reveal">${koSide}</div>` : `<div class="hint">눌러서 뜻 보기</div>`)
     : `<div class="front-ko">${koSide}</div>` + (revealed ? `<div class="reveal">${enSide}</div>` : `<div class="hint">눌러서 영어 보기</div>`);
@@ -582,7 +603,7 @@ function finishStudy() {
     : '전부 알아요로 넘겼어요.';
   $('eList').innerHTML = deck.map((n, i) => {
     const [w, m] = WORDS[n - 1], k = marks[i] || 'k';
-    return `<div class="row"><span class="w">${esc(w)}</span><span class="m">${esc(m)}</span><span class="t ${k}">${MARK_NAME[k]}</span></div>`;
+    return `<div class="row"><span class="w">${esc(w)}</span><span class="m">${meanH(n)}</span><span class="t ${k}">${MARK_NAME[k]}</span></div>`;
   }).join('');
   const c0 = ctx;
   if (c0.day) {
@@ -629,7 +650,7 @@ function renderListen() {
     : `<i class="cur" style="flex:none;width:${(L.pos + 1) / L.deck.length * 100}%"></i>`;
   $('lCard').innerHTML = `<span class="hole"></span><span class="num">${pad(n)}</span>
     <div class="lpart ${k === 'w' ? 'now' : ''}"><span class="word">${esc(w)}</span></div>
-    <div class="lpart ${k === 'm' ? 'now' : ''}"><div class="meaning">${esc(m)}</div></div>
+    <div class="lpart ${k === 'm' ? 'now' : ''}"><div class="meaning">${meanH(n)}</div></div>
     <div class="lpart ${k === 's' ? 'now' : ''}"><p class="ex">${hl(ex)}</p><p class="ko">${esc(ko)}</p></div>`
     + (L.done ? '<div class="ldone">다 들었어요. ▶를 누르면 처음부터 다시 들어요.</div>' : '');
   $('lPlay').innerHTML = L.on ? PAUSE_I : PLAY_I;
@@ -766,7 +787,7 @@ function finishTest() {
   $('eList').innerHTML = Q.map((q, i) => {
     const [w, m] = WORDS[q.n - 1];
     const mine = qRes[i] ? '' : `<span class="mine">고른 답: ${esc(q.opts[qPick[i]] ?? '')}${q.kind === 'blank' ? ` → 정답 ${esc(q.right)}` : ''}</span>`;
-    return `<div class="row"><span class="w">${esc(w)}</span><span class="m">${esc(m)}</span>${mine}<span class="t ${qRes[i] ? 'ok' : 'u'}">${qRes[i] ? '맞음' : '틀림'}</span></div>`;
+    return `<div class="row"><span class="w">${esc(w)}</span><span class="m">${meanH(q.n)}</span>${mine}<span class="t ${qRes[i] ? 'ok' : 'u'}">${qRes[i] ? '맞음' : '틀림'}</span></div>`;
   }).join('');
   const c0 = ctx;
   if (c0.day) {
@@ -791,7 +812,7 @@ function renderMarked() {
   $('mHint').textContent = list.length ? '오른쪽 버튼으로 표시를 바꿀 수 있어요. 다 외우면 "알아요"로 빼세요.' : '';
   $('mList').innerHTML = list.length ? list.map(n => {
     const [w, m] = WORDS[n - 1];
-    return `<div class="row"><span class="w">${pad(n)}  ${esc(w)}</span><span class="m">${esc(m)}</span><button class="t ${tab}" data-n="${n}">${MARK_NAME[tab]}</button></div>`;
+    return `<div class="row"><span class="w">${pad(n)}  ${esc(w)}</span><span class="m">${meanH(n)}</span><button class="t ${tab}" data-n="${n}">${MARK_NAME[tab]}</button></div>`;
   }).join('') : `<div class="empty">${tab === 'u'
       ? '아직 없어요.<br>카드에서 "몰라요"를 누르거나 테스트에서 틀린 단어가 여기 모여요.'
       : '아직 없어요.<br>카드에서 "헷갈려요"를 누른 단어가 여기 모여요.'}</div>`;
