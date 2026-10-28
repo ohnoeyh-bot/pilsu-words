@@ -135,6 +135,8 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 .a-u { background: var(--paper); border: 2px solid var(--unk) !important; color: var(--unk); }
 .a-c { background: var(--paper); border: 2px solid var(--conf-line) !important; color: var(--conf); }
 .a-k { background: var(--blue); color: #fff; }
+.actions.picked button:not(.sel) { opacity: .35; }
+.actions button.sel { box-shadow: 0 0 0 3px var(--ink, #222) inset; }
 .back { margin-top: 10px; align-self: center; font-size: 14px; color: var(--muted); padding: 8px 14px; }
 .back[disabled] { visibility: hidden; }
 
@@ -279,6 +281,7 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
     <button class="a-c" data-m="c">헷갈려요</button>
     <button class="a-k" data-m="k">알아요</button>
   </div>
+  <button class="nextQ" id="sNext">다음 단어 →</button>
   <button class="back" id="bPrev">이전 단어</button>
 </section>
 
@@ -313,7 +316,7 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
   <div class="dots" id="qDots"></div>
   <div class="card" id="qCard"></div>
   <div class="opts" id="opts"></div>
-  <button class="nextQ" id="nextQ">다음 문제</button>
+  <button class="nextQ" id="nextQ">다음 문제 →</button>
 </section>
 
 <!-- 카드 다 본 뒤 / 테스트 끝난 뒤 -->
@@ -530,6 +533,12 @@ function renderCard() {
   $('card').innerHTML = `<span class="hole"></span><span class="num">${pad(n)}</span>`
     + (cur ? `<span class="tag ${cur}">${LIST_NAME[cur]}</span>` : '') + body;
   $('bPrev').disabled = pos === 0;
+  // 고른 표시는 진하게, 나머지는 흐리게. 화살표를 눌러야 다음 단어로
+  const sel = marks[pos];
+  $('study').querySelector('.actions').classList.toggle('picked', !!sel);
+  document.querySelectorAll('.actions button').forEach(b => b.classList.toggle('sel', b.dataset.m === sel));
+  $('sNext').textContent = pos < deck.length - 1 ? '다음 단어 →' : '끝내기 →';
+  $('sNext').classList.toggle('on', !!sel);
 }
 function go(i) {
   pos = i; revealed = false; renderCard();
@@ -544,14 +553,17 @@ $('card').onclick = e => {
 };
 $('card').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('card').click(); } };
 
+// 고르면 뜻을 펼쳐 보여 주고 멈춤 — 생각할 시간. 넘어가기 전엔 다시 골라도 됨
 function markCard(m) {
   marks[pos] = m; setMark(deck[pos], m);
-  if (pos < deck.length - 1) go(pos + 1); else finishStudy();
+  revealed = true; renderCard();
 }
+function nextCard() { if (pos < deck.length - 1) go(pos + 1); else finishStudy(); }
+$('sNext').onclick = nextCard;
 document.querySelectorAll('.actions button').forEach(b => b.onclick = () => markCard(b.dataset.m));
 $('bPrev').onclick = () => { if (pos > 0) go(pos - 1); };
 
-// 옆으로 밀기: 왼쪽 = 알아요, 오른쪽 = 이전 단어
+// 옆으로 밀기: 왼쪽 = 알아요(이미 골랐으면 다음 단어), 오른쪽 = 이전 단어
 let sx = null, sy = null;
 $('card').addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
 $('card').addEventListener('touchend', e => {
@@ -559,7 +571,7 @@ $('card').addEventListener('touchend', e => {
   const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
   if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
     e.preventDefault();
-    if (dx < 0) markCard('k'); else if (pos > 0) go(pos - 1);
+    if (dx < 0) { if (marks[pos]) nextCard(); else markCard('k'); } else if (pos > 0) go(pos - 1);
   }
 });
 
@@ -753,7 +765,7 @@ $('opts').onclick = e => {
     $('qAfter').innerHTML = `<div class="after"><p class="ex">${hl(ex)}</p></div>`;
   }
   $('qDots').children[qi] && ($('qDots').children[qi].className = 'cur');
-  $('nextQ').textContent = qi < Q.length - 1 ? '다음 문제' : '결과 보기';
+  $('nextQ').textContent = qi < Q.length - 1 ? '다음 문제 →' : '결과 보기 →';
   $('nextQ').classList.add('on');
   $('nextQ').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 };
