@@ -135,8 +135,6 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 .a-u { background: var(--paper); border: 2px solid var(--unk) !important; color: var(--unk); }
 .a-c { background: var(--paper); border: 2px solid var(--conf-line) !important; color: var(--conf); }
 .a-k { background: var(--blue); color: #fff; }
-.actions.picked button:not(.sel) { opacity: .35; }
-.actions button.sel { box-shadow: 0 0 0 3px var(--ink, #222) inset; }
 .back { margin-top: 10px; align-self: center; font-size: 14px; color: var(--muted); padding: 8px 14px; }
 .back[disabled] { visibility: hidden; }
 
@@ -169,6 +167,9 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 .opts button.right { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
 .opts button.wrong { background: var(--unk-bg); border-color: var(--unk); color: var(--unk); }
 .opts button:disabled { cursor: default; }
+.opts button.sel { background: #e9eefa; border-color: var(--blue); color: var(--blue); }
+.dots i.pick { background: var(--muted); }
+.list .mine { grid-column: 1; font-size: 13px; color: var(--unk); }
 .nextQ { margin-top: 10px; padding: 16px; border-radius: 12px; background: var(--blue); color: #fff; font-weight: 800; font-size: 16px; display: none; }
 .nextQ.on { display: block; }
 
@@ -281,7 +282,6 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
     <button class="a-c" data-m="c">헷갈려요</button>
     <button class="a-k" data-m="k">알아요</button>
   </div>
-  <button class="nextQ" id="sNext">다음 단어 →</button>
   <button class="back" id="bPrev">이전 단어</button>
 </section>
 
@@ -317,6 +317,7 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
   <div class="card" id="qCard"></div>
   <div class="opts" id="opts"></div>
   <button class="nextQ" id="nextQ">다음 문제 →</button>
+  <button class="back" id="qPrev">이전 문제</button>
 </section>
 
 <!-- 카드 다 본 뒤 / 테스트 끝난 뒤 -->
@@ -533,12 +534,6 @@ function renderCard() {
   $('card').innerHTML = `<span class="hole"></span><span class="num">${pad(n)}</span>`
     + (cur ? `<span class="tag ${cur}">${LIST_NAME[cur]}</span>` : '') + body;
   $('bPrev').disabled = pos === 0;
-  // 고른 표시는 진하게, 나머지는 흐리게. 화살표를 눌러야 다음 단어로
-  const sel = marks[pos];
-  $('study').querySelector('.actions').classList.toggle('picked', !!sel);
-  document.querySelectorAll('.actions button').forEach(b => b.classList.toggle('sel', b.dataset.m === sel));
-  $('sNext').textContent = pos < deck.length - 1 ? '다음 단어 →' : '끝내기 →';
-  $('sNext').classList.toggle('on', !!sel);
 }
 function go(i) {
   pos = i; revealed = false; renderCard();
@@ -553,17 +548,14 @@ $('card').onclick = e => {
 };
 $('card').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('card').click(); } };
 
-// 고르면 뜻을 펼쳐 보여 주고 멈춤 — 생각할 시간. 넘어가기 전엔 다시 골라도 됨
 function markCard(m) {
   marks[pos] = m; setMark(deck[pos], m);
-  revealed = true; renderCard();
+  if (pos < deck.length - 1) go(pos + 1); else finishStudy();
 }
-function nextCard() { if (pos < deck.length - 1) go(pos + 1); else finishStudy(); }
-$('sNext').onclick = nextCard;
 document.querySelectorAll('.actions button').forEach(b => b.onclick = () => markCard(b.dataset.m));
 $('bPrev').onclick = () => { if (pos > 0) go(pos - 1); };
 
-// 옆으로 밀기: 왼쪽 = 알아요(이미 골랐으면 다음 단어), 오른쪽 = 이전 단어
+// 옆으로 밀기: 왼쪽 = 알아요, 오른쪽 = 이전 단어
 let sx = null, sy = null;
 $('card').addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
 $('card').addEventListener('touchend', e => {
@@ -571,7 +563,7 @@ $('card').addEventListener('touchend', e => {
   const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
   if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
     e.preventDefault();
-    if (dx < 0) { if (marks[pos]) nextCard(); else markCard('k'); } else if (pos > 0) go(pos - 1);
+    if (dx < 0) markCard('k'); else if (pos > 0) go(pos - 1);
   }
 });
 
@@ -704,7 +696,8 @@ if ('mediaSession' in navigator) {
 
 /* ---------- 테스트 ---------- */
 // 문제 2종: 'blank' 예문 빈칸에 들어갈 영어 고르기 / 'mean' 영어 보고 뜻 고르기
-let Q = [], qi = 0, qRes = [];
+// qPick: 문제마다 고른 보기 번호. 정답 확인은 끝에서 한 번에
+let Q = [], qi = 0, qPick = [], qRes = [];
 
 function pickWrong(n, kind, count) {
   // 오답 후보: 같은 DAY(또는 같은 목록) 단어 먼저, 모자라면 앞뒤 단어에서
@@ -726,14 +719,14 @@ function startTest(c) {
     const kind = kinds[i], right = kind === 'blank' ? target(WORDS[n - 1][2]) : WORDS[n - 1][1];
     return { n, kind, right, opts: shuffle([right, ...pickWrong(n, kind, 3)]) };
   });
-  qi = 0; qRes = [];
+  qi = 0; qPick = []; qRes = [];
   show('test'); renderQ();
 }
 function renderQ() {
   const q = Q[qi], [w, m, ex, ko] = WORDS[q.n - 1];
   $('qCount').textContent = `${qi + 1} / ${Q.length}`;
   $('qDots').innerHTML = Q.length <= 40
-    ? Q.map((_, i) => `<i class="${i === qi ? 'cur' : qRes[i] === true ? 'k' : qRes[i] === false ? 'u' : ''}"></i>`).join('')
+    ? Q.map((_, i) => `<i class="${i === qi ? 'cur' : qPick[i] != null ? 'pick' : ''}"></i>`).join('')
     : `<i class="cur" style="flex:none;width:${(qi + 1) / Q.length * 100}%"></i>`;
   if (q.kind === 'blank') {
     $('qCard').innerHTML = `<span class="hole"></span><span class="qtype">빈칸에 들어갈 단어를 고르세요</span>
@@ -745,33 +738,26 @@ function renderQ() {
       <div id="qAfter"></div>`;
   }
   $('opts').className = 'opts' + (q.kind === 'blank' ? ' en' : '');
-  $('opts').innerHTML = q.opts.map((o, i) => `<button data-i="${i}">${esc(o)}</button>`).join('');
-  $('nextQ').classList.remove('on');
+  $('opts').innerHTML = q.opts.map((o, i) => `<button data-i="${i}" class="${qPick[qi] === i ? 'sel' : ''}">${esc(o)}</button>`).join('');
+  $('nextQ').textContent = qi < Q.length - 1 ? '다음 문제 →' : '채점하기 →';
+  $('nextQ').classList.toggle('on', qPick[qi] != null);
+  $('qPrev').disabled = qi === 0;
 }
 $('qCard').onclick = e => { if (e.target.closest('[data-say]')) play(Q[qi].n, 'w'); };
+// 고르면 표시만 하고 다른 보기로 바꿀 수 있음. 화살표를 눌러야 다음 문제로
 $('opts').onclick = e => {
-  const b = e.target.closest('button[data-i]'); if (!b || b.disabled) return;
-  const q = Q[qi], pick = q.opts[+b.dataset.i], ok = pick === q.right, [w, m, ex] = WORDS[q.n - 1];
-  qRes[qi] = ok;
-  $('opts').querySelectorAll('button').forEach(x => {
-    x.disabled = true;
-    if (q.opts[+x.dataset.i] === q.right) x.classList.add('right');
-  });
-  if (!ok) { b.classList.add('wrong'); if (!S.mark[q.n]) setMark(q.n, 'u'); } // 틀린 단어는 모르는 단어로
-  if (q.kind === 'blank') {
-    $('blank').textContent = q.right; if (!ok) $('blank').classList.add('no');
-    $('qAfter').innerHTML = `<div class="after"><b class="m">${esc(w)}</b> ${esc(m)}</div>`;
-  } else {
-    $('qAfter').innerHTML = `<div class="after"><p class="ex">${hl(ex)}</p></div>`;
-  }
-  $('qDots').children[qi] && ($('qDots').children[qi].className = 'cur');
-  $('nextQ').textContent = qi < Q.length - 1 ? '다음 문제 →' : '결과 보기 →';
+  const b = e.target.closest('button[data-i]'); if (!b) return;
+  qPick[qi] = +b.dataset.i;
+  $('opts').querySelectorAll('button').forEach(x => x.classList.toggle('sel', x === b));
   $('nextQ').classList.add('on');
   $('nextQ').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 };
 $('nextQ').onclick = () => { if (qi < Q.length - 1) { qi++; renderQ(); window.scrollTo(0, 0); } else finishTest(); };
+$('qPrev').onclick = () => { if (qi > 0) { qi--; renderQ(); window.scrollTo(0, 0); } };
 
 function finishTest() {
+  qRes = Q.map((q, i) => q.opts[qPick[i]] === q.right);
+  Q.forEach((q, i) => { if (!qRes[i] && !S.mark[q.n]) setMark(q.n, 'u'); }); // 틀린 단어는 모르는 단어로
   const right = qRes.filter(Boolean).length, total = Q.length, wrong = total - right;
   if (ctx.day) { S.score[ctx.day] = Math.max(S.score[ctx.day] || 0, Math.round(right / total * 100)); save(); }
   $('eScore').innerHTML = `${right}<small> / ${total}</small>`;
@@ -779,7 +765,8 @@ function finishTest() {
   $('eSub').textContent = wrong ? '틀린 단어는 "모르는 단어"에 넣어 뒀어요.' : (ctx.day ? `DAY ${ctx.day} 단어는 다 알고 있어요.` : '');
   $('eList').innerHTML = Q.map((q, i) => {
     const [w, m] = WORDS[q.n - 1];
-    return `<div class="row"><span class="w">${esc(w)}</span><span class="m">${esc(m)}</span><span class="t ${qRes[i] ? 'ok' : 'u'}">${qRes[i] ? '맞음' : '틀림'}</span></div>`;
+    const mine = qRes[i] ? '' : `<span class="mine">고른 답: ${esc(q.opts[qPick[i]] ?? '')}${q.kind === 'blank' ? ` → 정답 ${esc(q.right)}` : ''}</span>`;
+    return `<div class="row"><span class="w">${esc(w)}</span><span class="m">${esc(m)}</span>${mine}<span class="t ${qRes[i] ? 'ok' : 'u'}">${qRes[i] ? '맞음' : '틀림'}</span></div>`;
   }).join('');
   const c0 = ctx;
   if (c0.day) {
