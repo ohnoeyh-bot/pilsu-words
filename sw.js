@@ -1,6 +1,6 @@
 // 인터넷 되면 항상 최신 파일을 받고, 안 되면(지하철 등) 핸드폰에 저장해 둔 파일로 열기
 // 단어나 화면을 고치면 VERSION 숫자를 올린다
-const VERSION = 'v12';
+const VERSION = 'v13';
 const FILES = ['./', 'index.html', 'words.js', 'pos.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

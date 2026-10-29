@@ -92,6 +92,7 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 .days button.done { background: var(--blue); border-color: var(--blue); color: #fff; }
 .days button.next { border: 2px solid var(--blue); color: var(--blue); }
 .days button.tested::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #69db7c; }
+.sets { grid-template-columns: 1fr 1fr; }
 .legend { font-size: 12px; color: var(--muted); margin: 10px 4px 0; display: flex; gap: 14px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
 
@@ -263,6 +264,12 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
     <button class="markBtn c" data-list="c"><b id="nC">0</b><span>헷갈리는 단어</span></button>
   </div>
 
+  <div id="setBox" hidden>
+    <h2>과외 단어</h2>
+    <div class="days sets" id="sets"></div>
+    <div style="height:22px"></div>
+  </div>
+
   <h2>DAY 고르기</h2>
   <div id="grid"></div>
   <div class="legend"><span><i style="background:var(--blue)"></i>카드 다 봄</span><span><i style="background:#69db7c;border-radius:50%"></i>테스트 봄</span></div>
@@ -404,12 +411,14 @@ h2 { font-size: 15px; font-weight: 800; margin: 0 4px 10px; color: var(--blue-de
 <script>
 const $ = id => document.getElementById(id);
 const PER = 30; // DAY 하나에 들어가는 단어 수
-const DAYS = Math.ceil(WORDS.length / PER);
+const DAYS = Math.ceil(MAIN / PER); // 필수단어만 DAY로. 과외 단어(SETS)는 따로
 const KEY = 'pilsu-v1';
 // done: 카드 다 본 DAY / mark: 단어번호 → 'u'(몰라요) 'c'(헷갈려요) / score: DAY → 테스트 최고 점수
 let S = { done: {}, mark: {}, score: {}, koFirst: false, autoSay: false };
+// setDone / setScore: 과외 단어 묶음 이름 → 카드 다 봄 / 테스트 최고 점수
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY)) || {}); } catch (e) {}
 if (S.per !== PER) { S.done = {}; S.score = {}; S.per = PER; } // DAY 크기가 바뀌면 DAY 기록만 새로 시작 (몰라요/헷갈려요 표시는 유지)
+S.setDone = S.setDone || {}; S.setScore = S.setScore || {};
 if (Array.isArray(S.again)) { S.again.forEach(n => { if (!S.mark[n]) S.mark[n] = 'u'; }); delete S.again; } // 첫 버전 "다시 볼래요" 기록 옮기기
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const save = () => { store(); queueSync(); };
@@ -436,14 +445,15 @@ function meanH(n) {
 
 const plain = s => s.replace(/[{}]/g, '');
 const target = s => (s.match(/\{(.+?)\}/) || [, ''])[1];
-const pad = n => String(n).padStart(3, '0');
+const pad = n => n > MAIN ? '과외' : String(n).padStart(3, '0');
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const dayRange = d => [(d - 1) * PER + 1, Math.min(d * PER, WORDS.length)];
+const dayRange = d => [(d - 1) * PER + 1, Math.min(d * PER, MAIN)];
 // DAY → 종이 단어장 위치 (예: 3차 DAY 1–5)
 const bookAt = n => [Math.floor((n - 1) / 100) + 1, Math.floor(((n - 1) % 100) / 10) + 1];
 const dayBook = d => { const [a, b] = dayRange(d), [r1, x] = bookAt(a), [r2, y] = bookAt(b);
   return r1 === r2 ? `${r1}차 DAY ${x === y ? x : x + '–' + y}` : `${r1}차 DAY ${x}–${r2}차 DAY ${y}`; };
 const dayDeck = d => { const [a, b] = dayRange(d), r = []; for (let n = a; n <= b; n++) r.push(n); return r; };
+const setDeck = i => { const r = []; for (let n = SETS[i].from; n <= SETS[i].to; n++) r.push(n); return r; };
 const markedDeck = k => Object.keys(S.mark).filter(n => S.mark[n] === k).map(Number).sort((x, y) => x - y);
 const nextDay = () => { for (let d = 1; d <= DAYS; d++) if (!S.done[d]) return d; return DAYS; };
 const MARK_NAME = { u: '몰라요', c: '헷갈려요', k: '알아요' };
@@ -504,33 +514,47 @@ function renderHome() {
   }
   h += '</div>';
   $('grid').innerHTML = h;
+  $('setBox').hidden = !SETS.length;
+  $('sets').innerHTML = SETS.map((t, i) => {
+    const cls = [S.setDone[t.name] ? 'done' : '', S.setScore[t.name] != null ? 'tested' : ''].join(' ');
+    return `<button data-s="${i}" class="${cls}">${esc(t.name)}<small>${t.to - t.from + 1}단어</small></button>`;
+  }).join('');
 }
 $('tStudy').onclick = () => startStudy({ day: nextDay() });
 $('tTest').onclick = () => startTest({ day: nextDay() });
 $('tListen').onclick = () => startListen({ day: nextDay() });
 document.querySelectorAll('.markBtn').forEach(b => b.onclick = () => openMarked(b.dataset.list));
 
-let sheetDay = 0;
+let sheetCtx = {};
 $('grid').onclick = e => {
   const b = e.target.closest('button[data-d]'); if (!b) return;
-  sheetDay = +b.dataset.d; const [a, z] = dayRange(sheetDay);
-  $('dsTitle').textContent = `DAY ${sheetDay}`;
-  const sc = S.score[sheetDay];
-  $('dsSub').textContent = `${pad(a)}–${pad(z)}번, 책 ${dayBook(sheetDay)}` + (sc != null ? `  /  테스트 최고 ${sc}점` : '');
+  const d = +b.dataset.d, [a, z] = dayRange(d);
+  sheetCtx = { day: d };
+  $('dsTitle').textContent = `DAY ${d}`;
+  const sc = S.score[d];
+  $('dsSub').textContent = `${pad(a)}–${pad(z)}번, 책 ${dayBook(d)}` + (sc != null ? `  /  테스트 최고 ${sc}점` : '');
   $('daySheet').classList.add('on');
 };
-$('dsStudy').onclick = () => startStudy({ day: sheetDay });
-$('dsTest').onclick = () => startTest({ day: sheetDay });
-$('dsListen').onclick = () => startListen({ day: sheetDay });
+$('sets').onclick = e => {
+  const b = e.target.closest('button[data-s]'); if (!b) return;
+  const t = SETS[+b.dataset.s], sc = S.setScore[t.name];
+  sheetCtx = { set: +b.dataset.s };
+  $('dsTitle').textContent = t.name;
+  $('dsSub').textContent = `${t.to - t.from + 1}단어` + (sc != null ? `  /  테스트 최고 ${sc}점` : '');
+  $('daySheet').classList.add('on');
+};
+$('dsStudy').onclick = () => startStudy(sheetCtx);
+$('dsTest').onclick = () => startTest(sheetCtx);
+$('dsListen').onclick = () => startListen(sheetCtx);
 $('dsClose').onclick = () => $('daySheet').classList.remove('on');
 document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => { if (e.target === s && s.id !== 'nameSheet') s.classList.remove('on'); }));
 
 /* ---------- 카드 넘겨보기 ---------- */
-// ctx: { day: 숫자 } 또는 { list: 'u'|'c' }
+// ctx: { day: 숫자 } 또는 { set: SETS 번호 } 또는 { list: 'u'|'c' }
 let ctx = {}, deck = [], pos = 0, marks = [], revealed = false;
 
-function ctxLabel() { return ctx.day ? `DAY ${ctx.day} (책 ${dayBook(ctx.day)})` : LIST_NAME[ctx.list]; }
-function ctxDeck() { return ctx.day ? dayDeck(ctx.day) : markedDeck(ctx.list); }
+function ctxLabel() { return ctx.day ? `DAY ${ctx.day} (책 ${dayBook(ctx.day)})` : ctx.set != null ? SETS[ctx.set].name : LIST_NAME[ctx.list]; }
+function ctxDeck() { return ctx.day ? dayDeck(ctx.day) : ctx.set != null ? setDeck(ctx.set) : markedDeck(ctx.list); }
 
 function startStudy(c) {
   ctx = c; deck = ctxDeck(); if (!deck.length) return;
@@ -597,7 +621,8 @@ function finishStudy() {
   const nU = marks.filter(x => x === 'u').length, nC = marks.filter(x => x === 'c').length;
   $('eScore').textContent = '';
   if (ctx.day) { S.done[ctx.day] = true; save(); }
-  $('eTitle').textContent = ctx.day ? `DAY ${ctx.day} 카드 끝!` : `${LIST_NAME[ctx.list]} 다 봤어요`;
+  if (ctx.set != null) { S.setDone[SETS[ctx.set].name] = true; save(); }
+  $('eTitle').textContent = ctx.day ? `DAY ${ctx.day} 카드 끝!` : ctx.set != null ? `${SETS[ctx.set].name} 카드 끝!` : `${LIST_NAME[ctx.list]} 다 봤어요`;
   $('eSub').textContent = (nU || nC)
     ? `몰라요 ${nU}개, 헷갈려요 ${nC}개는 처음 화면에 따로 모아 뒀어요.`
     : '전부 알아요로 넘겼어요.';
@@ -610,6 +635,8 @@ function finishStudy() {
     const nd = nextDay();
     endButtons(['방금 본 단어로 테스트 보기', () => startTest(c0)],
       S.done[nd] ? null : [`이어서 DAY ${nd} 카드 보기`, () => startStudy({ day: nd })]);
+  } else if (c0.set != null) {
+    endButtons(['방금 본 단어로 테스트 보기', () => startTest(c0)], null);
   } else {
     const left = markedDeck(c0.list).length;
     endButtons(left ? ['남은 단어로 테스트 보기', () => startTest(c0)] : null,
@@ -781,9 +808,10 @@ function finishTest() {
   Q.forEach((q, i) => { if (!qRes[i] && !S.mark[q.n]) setMark(q.n, 'u'); }); // 틀린 단어는 모르는 단어로
   const right = qRes.filter(Boolean).length, total = Q.length, wrong = total - right;
   if (ctx.day) { S.score[ctx.day] = Math.max(S.score[ctx.day] || 0, Math.round(right / total * 100)); save(); }
+  if (ctx.set != null) { const k = SETS[ctx.set].name; S.setScore[k] = Math.max(S.setScore[k] || 0, Math.round(right / total * 100)); save(); }
   $('eScore').innerHTML = `${right}<small> / ${total}</small>`;
   $('eTitle').textContent = wrong ? `${wrong}개 틀렸어요` : '전부 맞혔어요!';
-  $('eSub').textContent = wrong ? '틀린 단어는 "모르는 단어"에 넣어 뒀어요.' : (ctx.day ? `DAY ${ctx.day} 단어는 다 알고 있어요.` : '');
+  $('eSub').textContent = wrong ? '틀린 단어는 "모르는 단어"에 넣어 뒀어요.' : (ctx.day ? `DAY ${ctx.day} 단어는 다 알고 있어요.` : ctx.set != null ? `${SETS[ctx.set].name}는 다 알고 있어요.` : '');
   $('eList').innerHTML = Q.map((q, i) => {
     const [w, m] = WORDS[q.n - 1];
     const mine = qRes[i] ? '' : `<span class="mine">고른 답: ${esc(q.opts[qPick[i]] ?? '')}${q.kind === 'blank' ? ` → 정답 ${esc(q.right)}` : ''}</span>`;
@@ -793,6 +821,9 @@ function finishTest() {
   if (c0.day) {
     const nd = nextDay();
     endButtons(wrong ? ['같은 DAY 테스트 다시 보기', () => startTest(c0)] : (S.done[nd] ? null : [`DAY ${nd} 카드 보기`, () => startStudy({ day: nd })]),
+      wrong ? ['모르는 단어 보러 가기', () => openMarked('u')] : null);
+  } else if (c0.set != null) {
+    endButtons(wrong ? ['같은 단어로 테스트 다시 보기', () => startTest(c0)] : null,
       wrong ? ['모르는 단어 보러 가기', () => openMarked('u')] : null);
   } else {
     endButtons(markedDeck(c0.list).length ? ['한 번 더 테스트', () => startTest(c0)] : null,
@@ -848,7 +879,7 @@ function sendSync() {
   const body = JSON.stringify({
     id: S.id, name: S.name, at: new Date().toISOString(), per: PER, days: DAYS, nextDay: nextDay(),
     done: Object.keys(S.done).map(Number).sort((a, b) => a - b),
-    score: S.score, unknown: words('u'), confused: words('c'),
+    score: S.score, setDone: S.setDone, setScore: S.setScore, unknown: words('u'), confused: words('c'),
   });
   dirty = false;
   fetch(SYNC_URL, { method: 'POST', mode: 'no-cors', body, keepalive: body.length < 60000 })
@@ -878,7 +909,7 @@ $('swKo').onclick = () => { S.koFirst = !S.koFirst; save(); syncSw(); };
 $('swAuto').onclick = () => { S.autoSay = !S.autoSay; save(); syncSw(); if (S.autoSay) play(1, 'w'); };
 $('reset').onclick = () => {
   if ($('reset').dataset.sure) {
-    S.done = {}; S.mark = {}; S.score = {}; save(); delete $('reset').dataset.sure;
+    S.done = {}; S.mark = {}; S.score = {}; S.setDone = {}; S.setScore = {}; save(); delete $('reset').dataset.sure;
     $('reset').textContent = '기록 전부 지우기'; $('setSheet').classList.remove('on'); renderHome();
   } else { $('reset').dataset.sure = 1; $('reset').textContent = '한 번 더 누르면 지워져요'; }
 };
@@ -888,6 +919,8 @@ renderHome();
 const hd = location.hash.match(/^#(day|test|listen)(\d+)$/);
 if (hd) ({ day: startStudy, test: startTest, listen: startListen })[hd[1]]({ day: Math.min(+hd[2], DAYS) });
 const hl2 = location.hash.match(/^#list-([uc])$/); if (hl2) openMarked(hl2[1]);
+const hs = location.hash.match(/^#(set|settest)(\d+)$/); // #set1 = 첫 번째 과외 단어 카드, #settest1 = 그 테스트
+if (hs && SETS[hs[2] - 1]) (hs[1] === 'set' ? startStudy : startTest)({ set: hs[2] - 1 });
 if (!S.name) askName(); else sendSync(); // 처음이면 이름 묻기, 아니면 열 때마다 기록 보내기
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update());
