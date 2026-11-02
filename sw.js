@@ -1,6 +1,9 @@
 // 인터넷 되면 항상 최신 파일을 받고, 안 되면(지하철 등) 핸드폰에 저장해 둔 파일로 열기
 // 단어나 화면을 고치면 VERSION 숫자를 올린다
-const VERSION = 'v13';
+// ⚠️ 이름은 'pilsu-'로 시작. 같은 주소(ohnoeyh-bot.github.io) 아래 스페인어 앱 저장본을 지우지 않으려고
+//    업데이트할 때 'pilsu-'로 시작하는 것과 예전 이름(v1~v13)만 지운다
+const VERSION = 'pilsu-v14';
+const MINE = k => k.startsWith('pilsu-') || /^v\d+$/.test(k);
 const FILES = ['./', 'index.html', 'words.js', 'pos.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -10,7 +13,7 @@ self.addEventListener('install', e => {
     .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k))))
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => MINE(k) && k !== VERSION).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
